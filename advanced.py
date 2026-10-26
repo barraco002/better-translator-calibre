@@ -8,7 +8,7 @@ from qt.core import (  # type: ignore
     QStackedWidget, QSpacerItem, QTabWidget, QCheckBox,
     QComboBox, QSizePolicy)
 from calibre.constants import __version__  # type: ignore
-from calibre.gui2 import I  # type: ignore
+from calibre.utils.resources import get_image_path as I  # type: ignore
 from builtins import _  # type: ignore  # Calibre localization builtin
 
 from . import EbookTranslator
