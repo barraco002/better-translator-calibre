@@ -9,7 +9,7 @@ from qt.core import (  # type: ignore
     QComboBox, QSizePolicy)
 from calibre.constants import __version__  # type: ignore
 from calibre.gui2 import I  # type: ignore
-from calibre.utils.localization import _  # type: ignore
+from builtins import _  # type: ignore  # Calibre localization builtin
 
 from . import EbookTranslator
 from .lib.utils import uid, traceback_error

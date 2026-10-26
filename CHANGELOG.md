@@ -15,6 +15,7 @@
 - Require verified TLS and retain HTTP exception chains for retry headers.
 - Fix attribution/project links and expose the optional output-folder setting.
 - Declare Calibre >= 6.0 to match Python 3.10 / Qt 6 usage.
+- Use Calibre's localization builtin, including on Calibre 6.0.
 - Add deterministic ZIP/checksums, isolated tests, local HTTP/EPUB integration,
   ZIP-loader smoke test, Windows CI and Spanish installation instructions.
 

@@ -4,7 +4,8 @@ from typing import Any
 
 from mechanize import HTTPError
 
-from calibre.utils.localization import _, lang_as_iso639_1  # type: ignore
+from builtins import _  # type: ignore
+from calibre.utils.localization import lang_as_iso639_1  # type: ignore
 
 from ..lib.utils import log, traceback_error, request, socks_proxy
 from ..lib.exception import UnexpectedResult

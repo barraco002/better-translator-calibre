@@ -7,7 +7,7 @@ from tempfile import gettempdir
 from calibre import sanitize_file_name  # type: ignore
 from calibre.gui2 import Dispatcher  # type: ignore
 from calibre.constants import DEBUG, __version__  # type: ignore
-from calibre.utils.localization import _  # type: ignore
+from builtins import _  # type: ignore  # Calibre localization builtin
 from calibre.utils.logging import Stream  # type: ignore
 from calibre.ebooks.conversion.plumber import (  # type: ignore
     Plumber, CompositeProgressReporter)

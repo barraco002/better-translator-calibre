@@ -1,7 +1,7 @@
 import os.path
 
 from qt.core import QMenu, QSettings  # type: ignore
-from calibre.utils.localization import _  # type: ignore
+from builtins import _  # type: ignore  # Calibre localization builtin
 from calibre.gui2.actions import InterfaceAction  # type: ignore
 from calibre.utils.config_base import plugin_dir  # type: ignore
 from calibre.ebooks.conversion.config import (  # type: ignore

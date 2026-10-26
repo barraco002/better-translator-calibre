@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from http.client import IncompleteRead
 
 from mechanize._response import response_seek_wrapper as Response
-from calibre.utils.localization import _  # type: ignore
+from builtins import _  # type: ignore  # Calibre localization builtin
 
 from .. import EbookTranslator
 from ..lib.utils import request

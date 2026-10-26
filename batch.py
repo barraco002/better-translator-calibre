@@ -5,7 +5,7 @@ from qt.core import (  # type: ignore
     QDialog, QWidget, QPushButton, QHeaderView, QVBoxLayout, QTableWidget,
     QTableWidgetItem, Qt, QComboBox, QHBoxLayout, QApplication)
 
-from calibre.utils.localization import _  # type: ignore
+from builtins import _  # type: ignore  # Calibre localization builtin
 
 from .lib.config import get_config
 from .lib.translation import get_engine_class

@@ -9,7 +9,7 @@ import tempfile
 from datetime import datetime
 from glob import glob
 
-from calibre.utils.localization import _  # type: ignore
+from builtins import _  # type: ignore  # Calibre localization builtin
 
 from .utils import size_by_unit
 from .config import get_config

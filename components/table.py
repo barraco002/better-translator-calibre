@@ -3,7 +3,7 @@ from qt.core import (  # type: ignore
     QBrush, QTableWidgetItem, pyqtSignal, QTableWidgetSelectionRange,
     QColor, QPalette, QT_VERSION_STR)
 
-from calibre.utils.localization import _   # type: ignore
+from builtins import _  # type: ignore  # Calibre localization builtin
 
 from ..lib.utils import group
 from ..lib.translation import get_engine_class

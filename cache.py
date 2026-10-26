@@ -6,7 +6,7 @@ from qt.core import (  # type: ignore
     QTableView, QAbstractTableModel, QAbstractItemView, pyqtSignal,
     QLineEdit, QFileDialog, QModelIndex, QMenu, QCursor)
 
-from calibre.utils.localization import _  # type: ignore
+from builtins import _  # type: ignore  # Calibre localization builtin
 
 from .lib.utils import open_path
 from .lib.cache import default_cache_path, TranslationCache

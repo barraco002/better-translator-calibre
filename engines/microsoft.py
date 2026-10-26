@@ -3,7 +3,7 @@ import base64
 from datetime import datetime
 from urllib.parse import urlencode
 
-from calibre.utils.localization import _  # type: ignore
+from builtins import _  # type: ignore  # Calibre localization builtin
 
 from ..lib.utils import request
 

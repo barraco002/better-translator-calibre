@@ -7,7 +7,7 @@ import math
 from email.utils import parsedate_to_datetime
 from types import GeneratorType
 
-from calibre.utils.localization import _  # type: ignore
+from builtins import _  # type: ignore  # Calibre localization builtin
 
 from ..engines import builtin_engines
 from ..engines import GoogleFreeTranslateNew

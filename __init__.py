@@ -2,7 +2,7 @@ import os
 
 from calibre.constants import DEBUG  # type: ignore
 from calibre.customize import InterfaceActionBase  # type: ignore
-from calibre.utils.localization import _  # type: ignore
+from builtins import _  # type: ignore  # Calibre localization builtin
 
 
 __license__ = 'GPL v3'

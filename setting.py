@@ -10,7 +10,7 @@ from qt.core import (  # type: ignore
     QComboBox, QRegularExpression, pyqtSignal, QFormLayout, QDoubleSpinBox,
     QSpacerItem, QRegularExpressionValidator, QBoxLayout, QThread, pyqtSlot)
 from calibre.gui2 import error_dialog  # type: ignore
-from calibre.utils.localization import _  # type: ignore
+from builtins import _  # type: ignore  # Calibre localization builtin
 
 from .lib.config import get_config
 from .lib.utils import (

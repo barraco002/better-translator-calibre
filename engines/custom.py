@@ -3,7 +3,7 @@ from typing import Any
 
 from lxml import etree
 
-from calibre.utils.localization import _  # type: ignore
+from builtins import _  # type: ignore  # Calibre localization builtin
 
 from ..lib.utils import is_str
 

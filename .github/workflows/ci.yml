@@ -2,6 +2,7 @@ name: Test plugin
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -16,7 +17,7 @@ jobs:
       matrix:
         calibre: ['6.0.0', '9.16.0']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install Calibre
         shell: pwsh
         run: |
