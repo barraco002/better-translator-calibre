@@ -214,9 +214,13 @@ class TranslationWorker(QObject):
         translation.set_streaming(self.streaming.emit)
         translation.set_callback(self.callback.emit)
         translation.set_cancel_request(self.cancel_request)
-        translation.handle(paragraphs)
-        self.on_working = False
-        self.finished.emit()
+        try:
+            translation.handle(paragraphs)
+        except Exception as error:
+            self.logging.emit(str(error), True)
+        finally:
+            self.on_working = False
+            self.finished.emit()
         if self.need_close:
             time.sleep(0.5)
             self.close.emit(0)

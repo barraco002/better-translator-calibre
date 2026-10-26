@@ -132,17 +132,16 @@ class TestUtils(unittest.TestCase):
     def test_request_output_as_string(
             self, mock_browser, mock_request, mock_ssl):
         browser = mock_browser()
-        mock_ssl.create_default_context.side_effect = TypeError
 
         self.assertIs(
             request('https://example.com/api', 'test data'),
             browser.response().read().decode('utf-8').strip())
 
         browser.set_handle_robots.assert_called_once_with(False)
-        mock_ssl._create_unverified_context.assert_called_once_with(
-            cert_reqs=mock_ssl.CERT_NONE)
+        mock_ssl._create_unverified_context.assert_not_called()
         browser.set_ca_data.assert_called_once_with(
-            context=mock_ssl._create_unverified_context())
+            context=mock_ssl.create_default_context())
+        browser.response().close.assert_called_once()
 
         mock_request.assert_called_once_with(
             'https://example.com/api', 'test data', headers={}, timeout=30,
@@ -155,17 +154,16 @@ class TestUtils(unittest.TestCase):
     def test_request_output_as_raw_object(
             self, mock_browser, mock_request, mock_ssl):
         browser = mock_browser()
-        mock_ssl.create_default_context.side_effect = TypeError
 
         self.assertIs(
             request('https://example.com/api', 'test data', raw_object=True),
             browser.response())
 
         browser.set_handle_robots.assert_called_once_with(False)
-        mock_ssl._create_unverified_context.assert_called_once_with(
-            cert_reqs=mock_ssl.CERT_NONE)
+        mock_ssl._create_unverified_context.assert_not_called()
         browser.set_ca_data.assert_called_once_with(
-            context=mock_ssl._create_unverified_context())
+            context=mock_ssl.create_default_context())
+        browser.response().close.assert_not_called()
 
         mock_request.assert_called_once_with(
             'https://example.com/api', 'test data', headers={}, timeout=30,

@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.1.0 (2026-10-26)
+
+- Fix queue deadlocks on worker cancellation and processing/caching failures;
+  bound automatic concurrency to six and join executor threads before returning.
+- Check cancellation during retry/cooldown waits and streaming, and stop sibling
+  workers on shutdown. In-flight HTTP requests remain timeout-bound.
+- Honor shared Retry-After cooldowns, including the final failed request.
+- Detect stream EOF, malformed chunks, API errors, empty output and truncation.
+  Retry the whole paragraph and close responses.
+- Refuse batch export with failed paragraphs; restore Advanced Mode state on errors.
+- Fix metrics double-counting and reset progress for repeated jobs.
+- Isolate custom engines; default custom AI providers to non-streaming.
+- Require verified TLS and retain HTTP exception chains for retry headers.
+- Fix attribution/project links and expose the optional output-folder setting.
+- Declare Calibre >= 6.0 to match Python 3.10 / Qt 6 usage.
+- Add deterministic ZIP/checksums, isolated tests, local HTTP/EPUB integration,
+  ZIP-loader smoke test, Windows CI and Spanish installation instructions.
+
 ## v1.0.0 (2026-10-24) — Better Translator
 
 First fork release, based on Ebook Translator v2.4.2 by bookfere.com.

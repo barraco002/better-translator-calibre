@@ -83,8 +83,8 @@ class TestConversionWorker(unittest.TestCase):
         self.assertEqual('test custom title [German]', metadata.title)
         self.assertEqual('de', metadata.language)
         self.assertEqual([
-            'test subject 1', 'test subject 2', 'Translated by Ebook '
-            'Translator: https://translator.bookfere.com'], metadata.tags)
+            'test subject 1', 'test subject 2', 'Translated by Better '
+            'Translator: https://github.com/barraco002/better-translator-calibre'], metadata.tags)
 
         self.worker.db.create_book_entry.assert_called_once_with(metadata)
         self.worker.api.add_format.assert_called_once_with(

@@ -77,6 +77,7 @@ class TestProgressBar(unittest.TestCase):
 class TestTranslation(unittest.TestCase):
     def setUp(self):
         self.translator = Mock()
+        self.translator.max_error_count = 10
         self.glossary = Mock()
         self.paragraph = Mock()
         self.streaming = Mock()
@@ -175,8 +176,9 @@ class TestTranslation(unittest.TestCase):
 
     @patch.object(Translation, 'need_stop', lambda self: False)
     @patch(f'{module_name}.traceback_error')
-    @patch(f'{module_name}.time')
-    def test_translate_text_retry_failed_translation(self, mock_time, mock_te):
+    @patch(f'{module_name}.random.uniform', return_value=0)
+    @patch.object(Translation, '_sleep')
+    def test_translate_text_retry_failed_translation(self, mock_sleep, mock_random, mock_te):
         mock_te.return_value = 'test error trackback'
         self.translation.translator.match_error.return_value = False
         self.translation.translator.translate.side_effect = Exception(
@@ -202,12 +204,18 @@ class TestTranslation(unittest.TestCase):
             '┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n'
             'Error: test error trackback')
         self.log.assert_any_call(log_text, True)
-        mock_time.sleep.assert_has_calls([
-            call(5), call(10), call(15), call(20), call(25)])
+        mock_sleep.assert_has_calls([
+            call(5), call(10), call(20), call(40), call(60)])
         self.assertEqual(6, self.translation.abort_count)
 
     def test_translate_cancel_due_to_fatal_error(self):
-        pass
+        self.translator.translate.side_effect = RuntimeError('401 unauthorized')
+        self.translator.match_error.return_value = True
+        with patch.object(self.translation, '_sleep') as sleep:
+            with self.assertRaises(TranslationCanceled):
+                self.translation.translate_text(0, 'text')
+        sleep.assert_not_called()
+        self.translator.translate.assert_called_once()
 
     def test_translate_paragraph_cancel(self):
         self.translation.cancel_request = self.cancel_request
@@ -256,7 +264,7 @@ class TestTranslation(unittest.TestCase):
         self.streaming.assert_has_calls([
             call(''), call('Translating...'), call(''), call('你'),
             call('好'), call('世'), call('界')])
-        mock_time.sleep.assert_called_with(0.05)
+        mock_time.sleep.assert_not_called()
 
         self.assertEqual('你好呀世界', self.paragraph.translation)
 
@@ -265,6 +273,7 @@ class TestTranslation(unittest.TestCase):
         mock_time.reset_mock()
         self.paragraph.translation = ''
         self.translation.total = 2
+        self.translator.translate.return_value = (i for i in '你好世界')
         self.translation.translate_paragraph(self.paragraph)
 
         self.streaming.assert_has_calls([call(''), call('Translating...')])

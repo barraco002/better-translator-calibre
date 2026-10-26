@@ -10,7 +10,7 @@ from calibre.utils.localization import _  # type: ignore
 
 from .. import EbookTranslator
 from ..lib.utils import request
-from ..lib.exception import UnsupportedModel
+from ..lib.exception import UnsupportedModel, UnexpectedResult
 
 from .genai import GenAI
 from .languages import google
@@ -116,78 +116,72 @@ class ChatgptTranslate(GenAI):
     def get_result(self, response):
         if self.stream:
             return self._parse_stream(response)
-        # Parse JSON response with robust schema handling
         try:
             data = json.loads(response)
-            # Handle different response schemas
-            if 'choices' in data and len(data['choices']) > 0:
-                choice = data['choices'][0]
-                # Standard chat/completions format
-                if 'message' in choice and 'content' in choice['message']:
-                    return choice['message']['content']
-                # Alternative format (some nano models)
-                elif 'content' in choice:
-                    if isinstance(choice['content'], list) \
-                            and len(choice['content']) > 0:
-                        return choice['content'][0].get('text', '')
-                    elif isinstance(choice['content'], str):
-                        return choice['content']
-                # Direct text format
-                elif 'text' in choice:
-                    return choice['text']
-            # Fallback: try to find content anywhere in the response
-            if 'content' in data:
-                return data['content']
-            raise KeyError('No content found in response')
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            raise Exception(
-                _('Can not parse returned response. Raw data: {}\nError: {}')
-                .format(response[:500] + '...' if len(response) > 500 \
-                        else response, str(e)))
+            choice = self._get_choice(data)
+            message = choice.get('message') or choice
+            result = self._content_text(message.get('content', message.get('text')))
+            if not result.strip():
+                raise ValueError('The API returned no translation text.')
+            return result
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError) as e:
+            raise UnexpectedResult(str(e)) from e
+
+    @staticmethod
+    def _content_text(content):
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return ''.join(
+                item['text'] for item in content
+                if isinstance(item, dict) and isinstance(item.get('text'), str))
+        return ''
+
+    @staticmethod
+    def _get_choice(data):
+        if not isinstance(data, dict):
+            raise ValueError('The API response must be a JSON object.')
+        if data.get('error'):
+            raise ValueError('The API returned an error: %s' % data['error'])
+        choices = data.get('choices')
+        if choices:
+            choice = choices[0]
+            reason = choice.get('finish_reason')
+            if reason in ('length', 'content_filter'):
+                raise ValueError('Incomplete translation (finish_reason=%s).' % reason)
+            return choice
+        if 'content' in data:
+            return data
+        raise ValueError('The API returned no completion choices.')
 
     def _parse_stream(self, response):
-        while True:
-            try:
-                line = response.readline().decode('utf-8').strip()
-            except IncompleteRead:
-                continue
-            except Exception as e:
-                raise Exception(
-                    _('Can not parse returned response. Raw data: {}')
-                    .format(str(e)))
-            if not line:
-                continue
-            if line.startswith('data:'):
-                chunk = line.split('data: ')[1]
+        finished = False
+        try:
+            while True:
+                raw = response.readline()
+                if not raw:
+                    if finished:
+                        return
+                    raise UnexpectedResult('The translation stream ended unexpectedly.')
+                line = raw.decode('utf-8').strip() if isinstance(raw, bytes) else raw.strip()
+                if not line.startswith('data:'):
+                    continue  # Blank lines, event names and SSE comments.
+                chunk = line[5:].strip()
                 if chunk == '[DONE]':
-                    break
-                try:
-                    data = json.loads(chunk)
-                    # Handle different streaming response schemas
-                    if 'choices' in data and len(data['choices']) > 0:
-                        choice = data['choices'][0]
-                        # Standard streaming format
-                        if 'delta' in choice and 'content' in choice['delta']:
-                            content = choice['delta']['content']
-                            if content:
-                                yield str(content)
-                        # Alternative streaming format
-                        elif 'content' in choice:
-                            content = choice['content']
-                            if isinstance(content, list) and len(content) > 0:
-                                text = content[0].get('text', '')
-                                if text:
-                                    yield str(text)
-                            elif isinstance(content, str) and content:
-                                yield str(content)
-                        # Direct text format
-                        elif 'text' in choice:
-                            text = choice['text']
-                            if text:
-                                yield str(text)
-                except json.JSONDecodeError:
-                    # Skip malformed JSON chunks
-                    continue
+                    return
+                data = json.loads(chunk)
+                if isinstance(data, dict) and data.get('choices') == [] and not data.get('error'):
+                    continue  # Optional usage-only chunk.
+                choice = self._get_choice(data)
+                finished = finished or choice.get('finish_reason') == 'stop'
+                delta = choice.get('delta') or choice
+                content = self._content_text(delta.get('content', delta.get('text')))
+                if content:
+                    yield content
+        except (ValueError, TypeError, AttributeError, IncompleteRead) as e:
+            raise UnexpectedResult('Invalid or interrupted translation stream: %s' % e) from e
+        finally:
+            response.close()
 
 
 class ChatgptBatchTranslate:

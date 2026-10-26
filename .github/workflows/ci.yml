@@ -1,0 +1,38 @@
+name: Test plugin
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  calibre:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        calibre: ['6.0.0', '9.16.0']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Calibre
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'calibre.msi'
+          Invoke-WebRequest 'https://download.calibre-ebook.com/${{ matrix.calibre }}/calibre-64bit-${{ matrix.calibre }}.msi' -OutFile $installer
+          $install = Start-Process msiexec.exe -ArgumentList @('/i', $installer, '/qn', '/norestart') -Wait -PassThru -WindowStyle Hidden
+          if ($install.ExitCode -notin @(0, 3010)) { throw "Calibre install failed: $($install.ExitCode)" }
+      - name: Run suite
+        shell: pwsh
+        run: |
+          & 'C:\Program Files\Calibre2\calibre-debug.exe' --exec-file tools/run_tests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build and load plugin ZIP
+        shell: pwsh
+        run: |
+          & 'C:\Program Files\Calibre2\calibre-debug.exe' --exec-file tools/build_plugin.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & 'C:\Program Files\Calibre2\calibre-debug.exe' --exec-file tools/smoke_plugin.py
+          exit $LASTEXITCODE

@@ -53,8 +53,8 @@ defaults: dict[str, Any] = {
 
 
 class Configuration:
-    def __init__(self, config={}):
-        self.preferences = config
+    def __init__(self, config=None):
+        self.preferences = {} if config is None else config
 
     def get(self, key, default=None):
         """Get config value with dot flavor. e.g. get('a.b.c')"""

@@ -1,50 +1,18 @@
-[English](README.md) · __简体中文__
+# Better Translator for Calibre
 
----
+[English](README.md) · [Español](README.es.md) · [下载插件](https://github.com/barraco002/better-translator-calibre/releases/latest)
 
-# 电子书翻译器（Calibre 插件）
+Better Translator 是 [Ebook Translator v2.4.2](https://github.com/bookfere/Ebook-Translator-Calibre-Plugin)
+的 GPL v3 分支。原作者：**bookfere.com**；本分支维护者：**barraco002**。
 
-![Ebook Translator Calibre Plugin](images/logo.png)
+在 Calibre 内翻译电子书，可保留原文对照。需要 Calibre 6.0 或更新版本。
+下载发布页中的 **Better-Translator-v1.1.0.zip**，在 Calibre 的
+“首选项 → 插件 → 从文件加载插件”中安装，然后重新启动 Calibre。
+请勿使用 GitHub 的源代码 ZIP 代替插件 ZIP。
 
-一个可以将电子书翻译成指定语言（原文译文对照）的 Calibre 插件。
+1.1.0 修复了取消任务、线程生命周期、进度计数和自定义提供商之间的状态干扰，
+并检测不完整的流式响应。重试等待可以取消，正在执行的 HTTP 请求仍受超时限制。
+原版插件与本分支使用独立设置；API 密钥需要单独配置。
 
-__插件主页__：[https://translator.bookfere.com](https://translator.bookfere.com)
-
-![Translation illustration](images/sample-sc.png)
-
----
-
-## 主要功能
-
-* 支持所选翻译引擎所支持的语言（如 Google 翻译支持 134 种）
-* 支持多种翻译引擎，包括 Google 翻译、ChatGPT、Gemini、DeepL 等
-* 支持自定义翻译引擎（支持解析 JSON 和 XML 格式响应）
-* 支持所有 Calibre 所支持的电子书格式（输入 48 种，输出 20 种）以及 .srt 等额外格式
-* 支持批量翻译电子书，每本书的翻译过程同时进行互不影响
-* 支持缓存翻译内容，在请求失败或网络中断后无需重新翻译
-* 提供大量自定义设置，如将翻译的电子书存到 Calibre 书库或指定位置
-
----
-
-## 用户手册
-
-* [安装插件](https://github.com/bookfere/Ebook-Translator-Calibre-Plugin/wiki/简体中文#安装插件)
-* [使用方法](https://github.com/bookfere/Ebook-Translator-Calibre-Plugin/wiki/简体中文#使用方法)
-* [设置说明](https://github.com/bookfere/Ebook-Translator-Calibre-Plugin/wiki/简体中文#设置说明)
-
----
-
-## 相关链接
-
-* [GitHub](https://github.com/bookfere/Ebook-Translator-Calibre-Plugin)
-* [MobileRead](https://www.mobileread.com/forums/showthread.php?t=353052)
-* [发布页面](https://github.com/bookfere/Ebook-Translator-Calibre-Plugin/releases)
-* [详细介绍](https://bookfere.com/post/1057.html)
-* [贡献代码](CONTRIBUTING.md)
-* [捐助页面](https://bookfere.com/donate)
-
----
-
-## 许可证
-
-[GNU General Public License v3.0](LICENSE)
+完整功能、验证范围、隐私说明及开发命令见 [English README](README.md)。
+[反馈](https://github.com/barraco002/better-translator-calibre/issues) · [GPL v3](LICENSE)

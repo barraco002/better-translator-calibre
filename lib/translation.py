@@ -3,6 +3,8 @@ import time
 import json
 import random
 import threading
+import math
+from email.utils import parsedate_to_datetime
 from types import GeneratorType
 
 from calibre.utils.localization import _  # type: ignore
@@ -64,13 +66,15 @@ class ProgressBar:
     _count = 0
 
     def load(self, total):
+        self._count = 0
+        self.length = 0.0
         self.total = total
-        self.step = 1.0 / total
+        self.step = 1.0 / total if total else 0.0
 
     @property
     def count(self):
         self._count += 1
-        self.length += self.step
+        self.length = min(1.0, self._count * self.step)
         return self._count
 
 
@@ -95,6 +99,8 @@ class Translation:
         # request. Guarded by a lock because workers run in threads.
         self.throttle_lock = threading.Lock()
         self.throttle_until = 0.0
+        self.state_lock = threading.Lock()
+        self.stop_event = threading.Event()
         self.metric_counter = 0
 
     def set_fresh(self, fresh):
@@ -120,16 +126,65 @@ class Translation:
 
     def need_stop(self):
         # Cancel the request if there are more than max continuous errors.
-        return self.translator.max_error_count > 0 and \
-            self.abort_count >= self.translator.max_error_count
+        with self.state_lock:
+            return self.translator.max_error_count > 0 and \
+                self.abort_count >= self.translator.max_error_count
+
+    def _check_cancel(self):
+        if self.cancel_request() or self.stop_event.is_set() or self.need_stop():
+            raise TranslationCanceled(_('Translation canceled.'))
+
+    def _sleep(self, seconds):
+        # Poll cancellation during backoff instead of freezing for a minute.
+        while seconds > 0:
+            self._check_cancel()
+            step = min(seconds, 0.1)
+            time.sleep(step)
+            seconds -= step
 
     def _throttle_wait(self):
+        if not self.throttle_until:
+            return
         while True:
             with self.throttle_lock:
-                wait = self.throttle_until - time.time()
+                wait = self.throttle_until - time.monotonic()
             if wait <= 0:
                 return
-            time.sleep(min(wait, 5))
+            self._sleep(min(wait, 0.5))
+
+    @staticmethod
+    def _retry_after(error):
+        # Base.translate wraps HTTP errors; keep their Retry-After header useful.
+        for _ in range(5):
+            headers = getattr(error, 'headers', None)
+            value = headers.get('Retry-After') if headers else None
+            if value:
+                try:
+                    delay = float(value)
+                except (ValueError, TypeError):
+                    try:
+                        delay = parsedate_to_datetime(value).timestamp() - time.time()
+                    except (ValueError, TypeError, OverflowError):
+                        return None
+                return max(0, delay) if math.isfinite(delay) else None
+            error = error.__cause__ or error.__context__
+            if error is None:
+                break
+        return None
+
+    def _consume_stream(self, translation):
+        parts = []
+        if self.total == 1:
+            self.streaming('')
+        try:
+            for part in translation:
+                self._check_cancel()
+                if self.total == 1:
+                    self.streaming(part)
+                parts.append(part)
+        finally:
+            translation.close()
+        return ''.join(parts)
 
     def translate_text(self, row, text, retry=0, interval=0):
         """Translation engine service error code documentation:
@@ -137,45 +192,55 @@ class Translation:
         * https://www.deepl.com/docs-api/error-handling/
         * https://platform.openai.com/docs/guides/error-codes/api-errors
         """
-        if self.cancel_request():
-            raise TranslationCanceled(_('Translation canceled.'))
-        try:
-            translation = self.translator.translate(text)
-            self.abort_count = 0
-            return translation
-        except Exception as e:
-            if self.cancel_request() or self.need_stop():
-                raise TranslationCanceled(_('Translation canceled.'))
-            self.abort_count += 1
-            message = _('Failed to retrieve data from translate engine API.')
-            if retry >= self.translator.request_attempt:
-                raise TranslationFailed('{}\n{}'.format(message, str(e)))
-            retry += 1
-            # Exponential backoff with jitter instead of the stock linear
-            # +5 s ramp: 5, 10, 20, 40, capped at 60 (plus 0-2 s jitter).
-            interval = min(5 * (2 ** (retry - 1)), 60)
-            interval += random.uniform(0, 2)
-            error_text = str(e)
-            low = error_text.lower()
-            if '429' in error_text or 'rate limit' in low or \
-                    'too many requests' in low:
-                with self.throttle_lock:
-                    self.throttle_until = max(
-                        self.throttle_until, time.time() + 15)
-            # Logging any errors that occur during translation.
-            logged_text = text[:200] + '...' if len(text) > 200 else text
-            error_messages = [
-                sep(), _('Original: {}').format(logged_text), sep('┈'),
-                _('Status: Failed {} times / Sleeping for {} seconds')
-                .format(retry, interval), sep('┈'), _('Error: {}')
-                .format(traceback_error())]
-            if row >= 0:
-                error_messages.insert(1, _('Row: {}').format(row))
-            self.log('\n'.join(error_messages), True)
-            if self.translator.match_error(error_text):
-                raise TranslationCanceled(_('Translation canceled.'))
-            time.sleep(interval)
-            return self.translate_text(row, text, retry, interval)
+        while True:
+            self._check_cancel()
+            self._throttle_wait()
+            try:
+                translation = self.translator.translate(text)
+                if isinstance(translation, GeneratorType):
+                    translation = self._consume_stream(translation)
+                self._check_cancel()
+                if isinstance(translation, str) and not translation.strip():
+                    raise TranslationFailed(_('The engine returned an empty translation.'))
+                with self.state_lock:
+                    self.abort_count = 0
+                return translation
+            except TranslationCanceled:
+                raise
+            except Exception as e:
+                if self.cancel_request() or self.need_stop():
+                    raise TranslationCanceled(_('Translation canceled.'))
+                with self.state_lock:
+                    self.abort_count += 1
+                error_text = str(e)
+                low = error_text.lower()
+                if '429' in error_text or 'rate limit' in low or \
+                        'too many requests' in low:
+                    cooldown = self._retry_after(e)
+                    with self.throttle_lock:
+                        self.throttle_until = max(
+                            self.throttle_until,
+                            time.monotonic() + (15 if cooldown is None else cooldown))
+                if self.translator.match_error(error_text):
+                    raise TranslationCanceled(_('Translation canceled.')) from e
+                message = _('Failed to retrieve data from translate engine API.')
+                if retry >= self.translator.request_attempt:
+                    raise TranslationFailed('{}\n{}'.format(message, error_text)) from e
+                retry += 1
+                # Exponential backoff, capped at 60 s plus 0-2 s jitter.
+                interval = min(5 * (2 ** min(retry - 1, 4)), 60)
+                interval += random.uniform(0, 2)
+                # Logging any errors that occur during translation.
+                logged_text = text[:200] + '...' if len(text) > 200 else text
+                error_messages = [
+                    sep(), _('Original: {}').format(logged_text), sep('┈'),
+                    _('Status: Failed {} times / Sleeping for {} seconds')
+                    .format(retry, interval), sep('┈'), _('Error: {}')
+                    .format(traceback_error())]
+                if row >= 0:
+                    error_messages.insert(1, _('Row: {}').format(row))
+                self.log('\n'.join(error_messages), True)
+                self._sleep(interval)
 
     def translate_paragraph(self, paragraph):
         if self.cancel_request():
@@ -183,27 +248,10 @@ class Translation:
         if paragraph.translation and not self.fresh:
             paragraph.is_cache = True
             return
-        self._throttle_wait()
         self.streaming('')
         self.streaming(_('Translating...'))
         text = self.glossary.replace(paragraph.original)
         translation = self.translate_text(paragraph.row, text)
-        # Process streaming text
-        if isinstance(translation, GeneratorType):
-            if self.total == 1:
-                # Only for a single translation.
-                temp = ''
-                clear = True
-                for char in translation:
-                    if clear:
-                        self.streaming('')
-                        clear = False
-                    self.streaming(char)
-                    time.sleep(0.05)
-                    temp += char
-            else:
-                temp = ''.join([char for char in translation])
-            translation = temp
         translation = self.glossary.restore(translation)
         paragraph.translation = translation.strip()
         # Apply aligment checking and processing.
@@ -214,9 +262,10 @@ class Translation:
         paragraph.is_cache = False
 
     def process_translation(self, paragraph):
+        count = self.progress_bar.count
         self.progress(
             self.progress_bar.length, _('Translating: {}/{}').format(
-                self.progress_bar.count, self.progress_bar.total))
+                count, self.progress_bar.total))
 
         self.streaming(paragraph)
         self.callback(paragraph)
@@ -236,12 +285,18 @@ class Translation:
         # Live throughput metrics every 25 items (level 3).
         self.metric_counter += 1
         if self.metric_counter % 25 == 0 and self.total > 0:
-            pending = self.total - self.progress_bar.count
+            pending = max(0, self.total - count)
             self.log('Metrics: {}/{} items | pending {} | aborts {}'.format(
                 self.metric_counter, self.total, pending, self.abort_count))
 
-    def handle(self, paragraphs=[]):
+    def handle(self, paragraphs=None):
         start_time = time.time()
+        paragraphs = list(paragraphs or [])
+        self.total = 0
+        self.abort_count = 0
+        self.metric_counter = 0
+        self.throttle_until = 0.0
+        self.stop_event.clear()
         char_count = 0
         for paragraph in paragraphs:
             self.total += 1
@@ -260,11 +315,17 @@ class Translation:
         handler = Handler(
             paragraphs, self.translator.concurrency_limit,
             self.translate_paragraph, self.process_translation,
-            self.translator.request_interval)
-        handler.handle()
+            self.translator.request_interval, self.stop_event.set)
+        try:
+            handler.handle()
+        except TranslationCanceled:
+            self.log(_('Translation canceled.'), True)
+            if self.batch:
+                raise
+            return
 
         self.log(sep())
-        if self.batch and self.need_stop():
+        if self.batch and (self.need_stop() or handler.stats['errors']):
             raise Exception(_('Translation failed.'))
         consuming = round((time.time() - start_time) / 60, 2)
         self.log(_('Time consuming: {} minutes').format(consuming))
@@ -283,12 +344,13 @@ def get_engine_class(engine_name=None):
     if engine_name in engines:
         engine_class = engines[engine_name]
     elif engine_name in custom_engines:
-        engine_class = CustomTranslate
+        engine_class = type('CustomProvider', (CustomTranslate,), {})
         engine_data = json.loads(custom_engines[engine_name])
         engine_class.set_engine_data(engine_data)
     elif engine_name in custom_ai_engines:
-        engine_class = OpenAICompatTranslate
-        engine_class.set_engine_data(custom_ai_engines[engine_name])
+        engine_class = type('OpenAIProvider', (OpenAICompatTranslate,), {})
+        engine_class.set_engine_data(dict(
+            custom_ai_engines[engine_name], name=engine_name))
     else:
         engine_class = GoogleFreeTranslateNew
     engine_preferences = config.get('engine_preferences') or {}

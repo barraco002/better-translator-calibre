@@ -306,7 +306,7 @@ class ConversionWorker:
                 subjects = ebook_metadata_config.get('subjects')
                 metadata.tags += (subjects or []) + [
                     'Translated by Better Translator: '
-                    'https://translator.bookfere.com']
+                    'https://github.com/barraco002/better-translator-calibre']
                 # metadata.authors = ['bookfere.com']
                 # metadata.author_sort = 'bookfere.com'
                 # metadata.book_producer = 'Better Translator'

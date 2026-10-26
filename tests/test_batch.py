@@ -13,7 +13,7 @@ module_name = 'calibre_plugins.better_translator.batch'
 
 class TestBatchTranslation(unittest.TestCase):
     def setUp(self) -> None:
-        self.app = QApplication([])
+        self.app = QApplication.instance() or QApplication([])
         self.app.is_dark_theme = False
         self.parent = QWidget()
 
@@ -85,5 +85,4 @@ class TestBatchTranslation(unittest.TestCase):
         mock_done.assert_called_once_with(0)
 
     def tearDown(self):
-        self.app.quit()
-        del self.app
+        self.parent.close()

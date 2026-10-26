@@ -24,6 +24,7 @@ class TestFunction(unittest.TestCase):
             'cache_path': None,
             'log_translation': True,
             'show_notification': True,
+            'open_folder_after_translate': False,
             'translation_position': None,
             'column_gap': {
                 '_type': 'percentage',
@@ -39,6 +40,7 @@ class TestFunction(unittest.TestCase):
             'ignore_rules': [],
             'reserve_rules': [],
             'custom_engines': {},
+            'custom_ai_engines': {},
             'glossary_enabled': False,
             'glossary_path': None,
             'merge_enabled': False,

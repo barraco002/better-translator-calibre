@@ -27,14 +27,15 @@ class OpenAICompatTranslate(ChatgptTranslate):
     request_interval = 1.0
     request_timeout = 60.0
     temperature = 0.2
+    stream = False
 
     models: list[str] = []
     model: str | None = ''
 
     @classmethod
     def set_engine_data(cls, data):
-        cls.name = data.get('name')  # Provider ID del proveedor del usuario
+        cls.name = data.get('name') or 'OpenAI-compatible'
         cls.alias = data.get('alias') or cls.name
-        cls.endpoint = data.get('endpoint') or cls.endpoint
+        cls.endpoint = data.get('endpoint') or 'https://api.openai.com/v1/chat/completions'
         cls.models = list(data.get('models') or [])
         cls.model = data.get('model') or ''

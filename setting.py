@@ -380,6 +380,12 @@ class TranslationSetting(QDialog):
         notice.toggled.connect(
             lambda checked: self.config.update(show_notification=checked))
 
+        open_folder = QCheckBox(_('Open output folder after translation'))
+        open_folder.setChecked(self.config.get('open_folder_after_translate', False))
+        open_folder.toggled.connect(lambda checked: self.config.update(
+            open_folder_after_translate=checked))
+        layout.addWidget(open_folder)
+
         # Search path
         path_group = QGroupBox(_('Search Paths'))
         path_layout = QVBoxLayout(path_group)

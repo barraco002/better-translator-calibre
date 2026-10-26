@@ -166,10 +166,8 @@ def request(
         ssl_context.check_hostname = True
         ssl_context.verify_mode = ssl.CERT_REQUIRED
         br.set_ca_data(context=ssl_context)
-    except Exception:
-        # Fallback to unverified context if needed
-        br.set_ca_data(
-            context=ssl._create_unverified_context(cert_reqs=ssl.CERT_NONE))
+    except Exception as error:
+        raise RuntimeError('Could not initialize TLS certificate verification.') from error
     # Set up a proxy; use the proxy settings if available, otherwise read from
     # the environment.
     proxies: dict = {}
@@ -192,9 +190,16 @@ def request(
         response: Response | None = br.response()
         if response is None or raw_object:
             return response
-        return response.read().decode('utf-8').strip()
+        try:
+            return response.read().decode('utf-8').strip()
+        finally:
+            response.close()
     except HTTPError as e:
-        raise Exception(traceback_error() + '\n\n' + e.read().decode('utf-8'))
+        try:
+            message = e.read().decode('utf-8', errors='replace')
+        finally:
+            e.close()
+        raise RuntimeError(traceback_error() + '\n\n' + message) from e
 
 
 @contextmanager

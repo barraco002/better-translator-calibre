@@ -1,4 +1,3 @@
-import sys
 import asyncio
 import concurrent.futures
 
@@ -8,7 +7,7 @@ from .exception import TranslationCanceled
 
 class Handler:
     def __init__(self, paragraphs, concurrency_limit, translate_paragraph,
-                 process_translation, request_interval):
+                 process_translation, request_interval, on_stop=None):
         self.queue = asyncio.Queue()
         # Bounded done-queue: if the consumer (GUI/editor) is slower than the
         # translation workers, workers block on put() instead of growing the
@@ -19,10 +18,13 @@ class Handler:
         for paragraph in paragraphs:
             self.queue.put_nowait(paragraph)
 
-        self.concurrency_limit = concurrency_limit or self.queue.qsize()
+        # A zero limit means automatic, never one thread per paragraph.
+        self.concurrency_limit = max(1, min(
+            int(concurrency_limit or 6), max(1, self.queue.qsize())))
         self.translate_paragraph = translate_paragraph
         self.process_translation = process_translation
         self.request_interval = request_interval
+        self.on_stop = on_stop
         # One shared thread pool for the whole run (the stock version built a
         # new ThreadPoolExecutor per processed paragraph).
         self.pool = None
@@ -30,7 +32,7 @@ class Handler:
     def _ensure_pool(self):
         if self.pool is None:
             self.pool = concurrent.futures.ThreadPoolExecutor(
-                max_workers=self.concurrency_limit + 2,
+                max_workers=self.concurrency_limit + 1,
                 thread_name_prefix='better-translator')
         return self.pool
 
@@ -40,21 +42,20 @@ class Handler:
         while True:
             paragraph = await self.queue.get()
             try:
-                await loop.run_in_executor(
-                    pool, self.translate_paragraph, paragraph)
-                paragraph.error = None
+                try:
+                    await loop.run_in_executor(
+                        pool, self.translate_paragraph, paragraph)
+                    paragraph.error = None
+                    self.stats['done'] += 1
+                except TranslationCanceled:
+                    raise
+                except Exception:
+                    paragraph.error = traceback_error()
+                    self.stats['errors'] += 1
+                await self.done_queue.put(paragraph)
                 if self.queue.qsize() > 0 and not paragraph.is_cache:
-                    await asyncio.sleep(self.request_interval)
-                await self.done_queue.put(paragraph)
-                self.stats['done'] += 1
-                self.queue.task_done()
-            except TranslationCanceled:
-                await self.cancel_tasks()
-                break
-            except Exception:
-                paragraph.error = traceback_error()
-                self.stats['errors'] += 1
-                await self.done_queue.put(paragraph)
+                    await asyncio.sleep(max(0, self.request_interval))
+            finally:
                 self.queue.task_done()
 
     async def processing_worker(self):
@@ -62,17 +63,11 @@ class Handler:
         pool = self._ensure_pool()
         while True:
             paragraph = await self.done_queue.get()
-            await loop.run_in_executor(pool, self.process_translation, paragraph)
-            self.done_queue.task_done()
-
-    async def cancel_tasks(self):
-        self.queue.task_done()
-        while not self.queue.empty():
-            await self.queue.get()
-            self.queue.task_done()
-        while not self.done_queue.empty():
-            done = await self.done_queue.get()
-            self.done_queue.task_done()
+            try:
+                await loop.run_in_executor(
+                    pool, self.process_translation, paragraph)
+            finally:
+                self.done_queue.task_done()
 
     async def create_tasks(self):
         tasks = []
@@ -83,25 +78,31 @@ class Handler:
 
     async def process_tasks(self):
         tasks = await self.create_tasks()
-        await self.queue.join()
-        await self.done_queue.join()
-        # Terminate infinitive loop worker.
-        for task in tasks:
-            task.cancel()
+
+        async def drained():
+            await self.queue.join()
+            await self.done_queue.join()
+
+        completion = asyncio.create_task(drained())
         try:
-            await asyncio.gather(*tasks)
-        except asyncio.CancelledError:
-            pass
-        if self.pool is not None:
-            self.pool.shutdown(wait=False)
+            done, _ = await asyncio.wait(
+                tasks + [completion], return_when=asyncio.FIRST_COMPLETED)
+            # Surface worker/callback failures even if the queues just drained.
+            for task in tasks:
+                if task in done:
+                    task.result()
+            if completion in done:
+                completion.result()
+        finally:
+            if self.on_stop is not None:
+                self.on_stop()
+            for task in tasks + [completion]:
+                task.cancel()
+            await asyncio.gather(*tasks, completion, return_exceptions=True)
+            if self.pool is not None:
+                # Running requests finish under their configured timeout. No
+                # callbacks may outlive the event loop or touch a closed cache.
+                self.pool.shutdown(wait=True)
 
     def handle(self):
-        if sys.platform == 'win32':
-            asyncio.set_event_loop_policy(
-                asyncio.WindowsProactorEventLoopPolicy())
-        try:
-            loop = asyncio.get_event_loop()
-        except Exception:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        loop.run_until_complete(self.process_tasks())
+        asyncio.run(self.process_tasks())

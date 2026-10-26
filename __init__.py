@@ -19,22 +19,22 @@ def _z(message): return message
 
 class EbookTranslator(InterfaceActionBase):
     """Development environment requirements for the project:
-    - Calibre version: >= 5.0.0
-    - Python version: >=3.8.5
+    - Calibre version: >= 6.0.0
+    - Python version: >=3.10
     """
     name = _z('Better Translator')
     title = _(name)
     supported_platforms = ['windows', 'osx', 'linux']
     identifier = 'better-translator'
-    author = 'bookfere.com (Better Translator) / barraco002 (Better Translator)'
-    version = (1, 0, 0)
+    author = 'barraco002; based on Ebook Translator by bookfere.com'
+    version = (1, 1, 0)
     __version__ = 'v' + '.'.join(map(str, version))
     description = _(
         'Fast ebook translation for Calibre with AI engines: parallel '
         'requests, adaptive backoff, live metrics and OpenAI-compatible '
-        'providers. Enhanced fork of the acclaimed Better Translator.')
+        'providers. Based on Ebook Translator by bookfere.com.')
     # see: https://www.mobileread.com/forums/showthread.php?t=242223
-    minimum_calibre_version = (5, 0, 0)
+    minimum_calibre_version = (6, 0, 0)
 
     actual_plugin = 'calibre_plugins.better_translator.ui:EbookTranslatorGui'
 

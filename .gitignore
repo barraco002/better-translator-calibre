@@ -4,3 +4,7 @@
 _site
 *.pyc
 tags
+__pycache__/
+dist/
+work/
+.venv/
